@@ -79,7 +79,8 @@ function lockScreen(msg) {
   const run = async () => {
     go.disabled = true; m.hidden = true;
     try {
-      const chk = await getJSON('check.bin');
+      let chk;
+      try { chk = await getJSON('check.bin'); } catch (e) { m.textContent = 'まだデータが届いていません。毎日のチェックが一度終わると開けるようになります。'; m.hidden = false; go.disabled = false; return; }
       const key = await deriveKey(inp.value, b64d(chk.salt));
       const ok = await unseal(chk, key);
       if (ok.ok !== 'kabu-app') throw new Error();
