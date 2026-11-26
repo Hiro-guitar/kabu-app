@@ -95,3 +95,5 @@ table.t{width:100%;border-collapse:collapse;font-size:12px}
 table.t th{text-align:left;color:var(--mut);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
 table.t td{padding:6px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
 .tw{overflow-x:auto}
+.grid3{display:grid;grid-template-columns:1.2fr 1fr 1.3fr;gap:8px}
+.t td.up{color:var(--up)} .t td.dn{color:var(--dn)}

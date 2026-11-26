@@ -216,6 +216,16 @@ function priceBox(code, small) {
     h('small', null, l ? `前日比 ${pct(chg)}` : '前の晩の終値'));
 }
 
+// ---------- 仮に買ったら ----------
+const yen = (v) => `${v < 0 ? '-' : v > 0 ? '+' : ''}${Math.abs(Math.round(v)).toLocaleString()}円`;
+function lotSum(w) {
+  const lots = (w && w.lots) || []; if (!lots.length) return null;
+  const sh = lots.reduce((a, l) => a + (+l.shares || 0), 0); const cost = lots.reduce((a, l) => a + (+l.price || 0) * (+l.shares || 0), 0);
+  const p = priceNow(w.code); const val = p != null ? p * sh : null;
+  return { sh, cost, avg: sh ? cost / sh : 0, val, pl: val != null ? val - cost : null, plp: val != null && cost ? (val / cost - 1) * 100 : null };
+}
+function plSpan(t) { return h('span', { class: t.pl > 0 ? 'up' : t.pl < 0 ? 'dn' : '' }, t.pl != null ? `${yen(t.pl)}（${pct(t.plp)}）` : '—'); }
+
 // ---------- 画面 ----------
 function setView(v) { S.view = v; document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-current', b.dataset.v === v ? 'page' : 'false')); render(); window.scrollTo(0, 0); }
 function render() {
@@ -238,6 +248,14 @@ function vWatch() {
   const out = [h('h2', null, '見守り中の銘柄'), h('p', { class: 'note' }, '「見守る」で入れた銘柄。毎晩のチェックで追いかけます。')];
   if (!S.watch.length) { out.push(h('div', { class: 'empty' }, 'まだありません。「候補」や「記録」から「見守る」を押すと入ります。')); return out; }
   const ev = S.data.watch_events || [];
+  const sums = S.watch.map(lotSum).filter(Boolean);
+  if (sums.length) {
+    const cost = sums.reduce((a, t) => a + t.cost, 0), val = sums.reduce((a, t) => a + (t.val ?? t.cost), 0);
+    const tot = { pl: val - cost, plp: cost ? (val / cost - 1) * 100 : 0 };
+    out.push(h('div', { class: 'card' }, h('div', { class: 'row' }, h('span', { class: 'code' }, '仮に買った分の合計'),
+      h('div', { class: 'price' }, h('b', { class: tot.pl > 0 ? 'up' : tot.pl < 0 ? 'dn' : '' }, yen(tot.pl)), h('small', null, `${Math.round(cost).toLocaleString()}円 → 今 ${Math.round(val).toLocaleString()}円（${pct(tot.plp)}）`))),
+      h('p', { class: 'note' }, '手数料と税金は入れていません。')));
+  }
   const list = h('div', { class: 'list' });
   [...S.watch].sort((a, b) => String(b.added_at).localeCompare(String(a.added_at))).forEach((w) => {
     const code = String(w.code); const p = priceNow(code); const ap = w.added_price != null ? +w.added_price : null;
@@ -248,6 +266,8 @@ function vWatch() {
         h('div', { class: 'price' }, h('b', { class: chg > 0 ? 'up' : chg < 0 ? 'dn' : '' }, p != null ? `${p}円` : '—'),
           h('small', null, ap ? `入れた日 ${ap}円から ${pct(chg)}` : `${md(w.added_at)}に入れた`))),
       h('div', { class: 'ev' }, mine.length ? [h('b', null, `${md(mine[0].date)} ${mine[0].kind}`), `：${mine[0].what}`] : `${md(w.added_at)}に入れた／まだ何も起きていません`));
+    const t = lotSum(w);
+    if (t) card.append(h('div', { class: 'ev' }, h('b', null, `仮に ${t.sh.toLocaleString()}株（平均 ${(+t.avg.toFixed(1)).toLocaleString()}円）`), '　', plSpan(t)));
     list.append(card);
   });
   out.push(list);
@@ -345,6 +365,44 @@ function openDetail(code, keep) {
   });
   sec.append(h('h3', null, '日足（赤＝上げた日、青＝下げた日。指で横になぞるとその日。下の三角＝開示・お知らせの日）'), bar, box);
   body.append(sec);
+  {
+    const s4 = h('div', { class: 'sec' }, h('h3', null, '仮に買ったら（値段と株数を好きに入れて、今いくらになっているかを見ます）'));
+    const lots = (w && w.lots) || [];
+    if (lots.length) {
+      const t = lotSum(w);
+      const tb = h('table', { class: 't' }, h('thead', null, h('tr', null, h('th', null, '日付'), h('th', null, '値段'), h('th', null, '株数'), h('th', null, '損益'), h('th', null, ''))));
+      const tbody = h('tbody');
+      lots.forEach((l, i) => {
+        const p = priceNow(code); const pl = p != null ? (p - l.price) * l.shares : null;
+        const del = h('button', { class: 'btn', type: 'button', style: 'padding:4px 10px' }, '消す');
+        del.addEventListener('click', async () => { del.disabled = true; const next = S.watch.map((x) => (String(x.code) === code ? { ...x, lots: lots.filter((_, j) => j !== i) } : x)); await saveWatch(next); openDetail(code, true); });
+        tbody.append(h('tr', null, h('td', null, md(l.date)), h('td', null, `${l.price}円`), h('td', null, `${(+l.shares).toLocaleString()}株`),
+          h('td', { class: pl > 0 ? 'up' : pl < 0 ? 'dn' : '' }, pl != null ? [yen(pl), h('br'), pct((p / l.price - 1) * 100)] : '—'), h('td', null, del)));
+      });
+      tb.append(tbody);
+      s4.append(h('div', { class: 'tw' }, tb),
+        h('p', { class: 'ev' }, h('b', null, `合計 ${t.sh.toLocaleString()}株・平均 ${(+t.avg.toFixed(1)).toLocaleString()}円・使った額 ${Math.round(t.cost).toLocaleString()}円`), '　', plSpan(t)),
+        h('p', { class: 'note' }, '手数料と税金は入れていません。'));
+    }
+    const ip = h('input', { type: 'text', inputmode: 'decimal', placeholder: '値段（円）' }); const pn = priceNow(code); if (pn != null) ip.value = pn;
+    const is = h('input', { type: 'text', inputmode: 'numeric', placeholder: '株数' }); is.value = '100';
+    const id = h('input', { type: 'text', inputmode: 'numeric', placeholder: 'YYYY-MM-DD' }); id.value = todayJ();
+    const ng = h('p', { class: 'msg ng', hidden: true }, '値段と株数を数字で入れてください。');
+    const add = h('button', { class: 'btn pri', type: 'button' }, '仮に買う');
+    add.addEventListener('click', async () => {
+      const price = parseFloat(ip.value.replace(/[,円\s]/g, '')), shares = parseInt(is.value.replace(/[,株\s]/g, ''), 10);
+      if (!(price > 0) || !(shares > 0)) { ng.hidden = false; return; }
+      add.disabled = true;
+      const lot = { price, shares, date: /^\d{4}-\d{2}-\d{2}$/.test(id.value) ? id.value : todayJ() };
+      let next;
+      if (isWatched(code)) next = S.watch.map((x) => (String(x.code) === code ? { ...x, lots: [...(x.lots || []), lot] } : x));
+      else next = [...S.watch, { code, name, added_at: todayJ(), added_price: priceNow(code), memo: '', lots: [lot] }];
+      if (await saveWatch(next)) openDetail(code, true); else add.disabled = false;
+    });
+    s4.append(h('div', { class: 'grid3' }, h('label', { class: 'f' }, '値段', ip), h('label', { class: 'f' }, '株数', is), h('label', { class: 'f' }, '日付', id)), h('div', { class: 'btns' }, add, ng));
+    if (!w) s4.append(h('p', { class: 'note' }, '仮に買うと、この銘柄は見守りにも入ります。'));
+    body.append(s4);
+  }
   if (w) {
     const ev = (S.data.watch_events || []).filter((e) => String(e.code) === code);
     const s2 = h('div', { class: 'sec' }, h('h3', null, `見守りに入れてからのできごと（${md(w.added_at)}〜${w.added_price ? `、入れた日の株価 ${w.added_price}円` : ''}）`));
