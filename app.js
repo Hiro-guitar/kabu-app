@@ -197,7 +197,10 @@ async function refreshLive() {
     for (const [sym, v] of Object.entries(j.quotes || {})) if (v && v.price != null) S.live[sym.split('.')[0]] = v;
     S.liveAt = new Date();
     note.hidden = false;
-    note.textContent = `株価は ${S.liveAt.getHours()}:${String(S.liveAt.getMinutes()).padStart(2, '0')} に取得（Yahoo Finance。最大20分ほど遅れることがあります）`;
+    const ts = Math.max(0, ...Object.values(S.live).map((v) => +v.time || 0));
+    const qt = ts ? new Date(ts * 1000) : null;
+    const hm = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+    note.textContent = `${hm(S.liveAt)} に取得。株価は ${qt ? hm(qt) + ' 時点' : '時刻不明'} の値です（Yahoo Finance。証券会社の画面より遅れることがあります）`;
     render(); if (S.detail) openDetail(S.detail, true);
   } catch (e) {
     note.hidden = false; note.textContent = '今の株価を取れませんでした。前の晩のチェック時点の株価を出しています。';
