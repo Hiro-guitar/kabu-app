@@ -235,7 +235,7 @@ function dayChips() {
 const onDay = (rows) => (rows || []).filter((r) => (r.day || r.date) === S.day);
 
 function vWatch() {
-  const out = [h('h2', null, '見守り中の銘柄'), h('p', { class: 'note' }, '候補や記録の「見守る」で入れた銘柄です。候補でなくなっても毎晩追いかけ、開示・お知らせ・大株主の売買・5%以上の下げ・近い権利日を記録します。')];
+  const out = [h('h2', null, '見守り中の銘柄'), h('p', { class: 'note' }, '「見守る」で入れた銘柄。毎晩のチェックで追いかけます。')];
   if (!S.watch.length) { out.push(h('div', { class: 'empty' }, 'まだありません。「候補」や「記録」から「見守る」を押すと入ります。')); return out; }
   const ev = S.data.watch_events || [];
   const list = h('div', { class: 'list' });
