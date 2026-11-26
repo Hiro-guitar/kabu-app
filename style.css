@@ -83,7 +83,7 @@ h2{font-size:17px;margin:8px 0 -6px;font-weight:700}
 .news .pill{margin-right:6px;font-size:10px;padding:1px 6px}
 .sec{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
 .sec h3{margin:0;font-size:13px;color:var(--mut);font-weight:600}
-textarea,input[type=text],input[type=password],input[type=url],select{font:inherit;font-size:16px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%}
+textarea,input[type=text],input[type=date],input[type=password],input[type=url],select{font:inherit;font-size:16px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%}
 label.f{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--mut)}
 .msg{font-size:12.5px;margin:0}
 .msg.ng{color:var(--bad)} .msg.ok{color:var(--ok)}
@@ -97,3 +97,7 @@ table.t td{padding:6px;border-bottom:1px solid var(--line);font-variant-numeric:
 .tw{overflow-x:auto}
 .grid3{display:grid;grid-template-columns:1.2fr 1fr 1.3fr;gap:8px}
 .t td.up{color:var(--up)} .t td.dn{color:var(--dn)}
+.bwrap{display:flex;flex-direction:column;gap:6px}
+.bbar{height:8px;border-radius:4px;background:var(--panel2);overflow:hidden}
+.bbar i{display:block;height:100%;background:var(--acc)}
+input[type=date]{-webkit-appearance:none;appearance:none;min-height:44px}

@@ -224,6 +224,13 @@ function lotSum(w) {
   const p = priceNow(w.code); const val = p != null ? p * sh : null;
   return { sh, cost, avg: sh ? cost / sh : 0, val, pl: val != null ? val - cost : null, plp: val != null && cost ? (val / cost - 1) * 100 : null };
 }
+const budget = () => +(LS.get('kabu_budget') || 200000);
+function budgetBar(cost) {
+  const b = budget(); const r = Math.min(1, cost / b);
+  const bar = h('div', { class: 'bbar' }, h('i', { style: `width:${(r * 100).toFixed(1)}%` }));
+  return h('div', { class: 'bwrap' }, h('div', { class: 'row' }, h('span', { class: 'code' }, `予算 ${b.toLocaleString()}円のうち`),
+    h('span', { class: 'price' }, h('b', { style: 'font-size:15px' }, `${Math.round(cost).toLocaleString()}円使用`), h('small', null, `残り ${Math.round(b - cost).toLocaleString()}円`))), bar);
+}
 function plSpan(t) { return h('span', { class: t.pl > 0 ? 'up' : t.pl < 0 ? 'dn' : '' }, t.pl != null ? `${yen(t.pl)}（${pct(t.plp)}）` : '—'); }
 
 // ---------- 画面 ----------
@@ -254,7 +261,8 @@ function vWatch() {
     const tot = { pl: val - cost, plp: cost ? (val / cost - 1) * 100 : 0 };
     out.push(h('div', { class: 'card' }, h('div', { class: 'row' }, h('span', { class: 'code' }, '仮に買った分の合計'),
       h('div', { class: 'price' }, h('b', { class: tot.pl > 0 ? 'up' : tot.pl < 0 ? 'dn' : '' }, yen(tot.pl)), h('small', null, `${Math.round(cost).toLocaleString()}円 → 今 ${Math.round(val).toLocaleString()}円（${pct(tot.plp)}）`))),
-      h('p', { class: 'note' }, '手数料と税金は入れていません。')));
+      budgetBar(cost),
+      h('p', { class: 'note' }, '手数料と税金は入れていません。予算は設定で変えられます。')));
   }
   const list = h('div', { class: 'list' });
   [...S.watch].sort((a, b) => String(b.added_at).localeCompare(String(a.added_at))).forEach((w) => {
@@ -267,7 +275,7 @@ function vWatch() {
           h('small', null, ap ? `入れた日 ${ap}円から ${pct(chg)}` : `${md(w.added_at)}に入れた`))),
       h('div', { class: 'ev' }, mine.length ? [h('b', null, `${md(mine[0].date)} ${mine[0].kind}`), `：${mine[0].what}`] : `${md(w.added_at)}に入れた／まだ何も起きていません`));
     const t = lotSum(w);
-    if (t) card.append(h('div', { class: 'ev' }, h('b', null, `仮に ${t.sh.toLocaleString()}株（平均 ${(+t.avg.toFixed(1)).toLocaleString()}円）`), '　', plSpan(t)));
+    if (t) card.append(h('div', { class: 'ev' }, h('b', null, `仮に ${t.sh.toLocaleString()}株・${Math.round(t.cost).toLocaleString()}円分（平均 ${(+t.avg.toFixed(1)).toLocaleString()}円）`), '　', plSpan(t)));
     list.append(card);
   });
   out.push(list);
@@ -370,25 +378,27 @@ function openDetail(code, keep) {
     const lots = (w && w.lots) || [];
     if (lots.length) {
       const t = lotSum(w);
-      const tb = h('table', { class: 't' }, h('thead', null, h('tr', null, h('th', null, '日付'), h('th', null, '値段'), h('th', null, '株数'), h('th', null, '損益'), h('th', null, ''))));
+      const tb = h('table', { class: 't' }, h('thead', null, h('tr', null, h('th', null, '日付'), h('th', null, '値段'), h('th', null, '株数'), h('th', null, '金額'), h('th', null, '損益'), h('th', null, ''))));
       const tbody = h('tbody');
       lots.forEach((l, i) => {
         const p = priceNow(code); const pl = p != null ? (p - l.price) * l.shares : null;
-        const del = h('button', { class: 'btn', type: 'button', style: 'padding:4px 10px' }, '消す');
+        const del = h('button', { class: 'btn', type: 'button', style: 'padding:2px 9px', 'aria-label': 'この行を消す' }, '×');
         del.addEventListener('click', async () => { del.disabled = true; const next = S.watch.map((x) => (String(x.code) === code ? { ...x, lots: lots.filter((_, j) => j !== i) } : x)); await saveWatch(next); openDetail(code, true); });
-        tbody.append(h('tr', null, h('td', null, md(l.date)), h('td', null, `${l.price}円`), h('td', null, `${(+l.shares).toLocaleString()}株`),
+        tbody.append(h('tr', null, h('td', null, md(l.date)), h('td', null, `${l.price}円`), h('td', null, `${(+l.shares).toLocaleString()}株`), h('td', null, `${Math.round(l.price * l.shares).toLocaleString()}円`),
           h('td', { class: pl > 0 ? 'up' : pl < 0 ? 'dn' : '' }, pl != null ? [yen(pl), h('br'), pct((p / l.price - 1) * 100)] : '—'), h('td', null, del)));
       });
       tb.append(tbody);
       s4.append(h('div', { class: 'tw' }, tb),
-        h('p', { class: 'ev' }, h('b', null, `合計 ${t.sh.toLocaleString()}株・平均 ${(+t.avg.toFixed(1)).toLocaleString()}円・使った額 ${Math.round(t.cost).toLocaleString()}円`), '　', plSpan(t)),
+        h('dl', { class: 'kv' }, h('dt', null, '使った額'), h('dd', null, h('b', null, `${Math.round(t.cost).toLocaleString()}円`), `（${t.sh.toLocaleString()}株・平均 ${(+t.avg.toFixed(1)).toLocaleString()}円）`),
+          h('dt', null, '今の値打ち'), h('dd', null, t.val != null ? `${Math.round(t.val).toLocaleString()}円` : '—'), h('dt', null, '損益'), h('dd', null, plSpan(t))),
         h('p', { class: 'note' }, '手数料と税金は入れていません。'));
     }
     const ip = h('input', { type: 'text', inputmode: 'decimal', placeholder: '値段（円）' }); const pn = priceNow(code); if (pn != null) ip.value = pn;
     const is = h('input', { type: 'text', inputmode: 'numeric', placeholder: '株数' }); is.value = '100';
-    const id = h('input', { type: 'text', inputmode: 'numeric', placeholder: 'YYYY-MM-DD' }); id.value = todayJ();
+    const id = h('input', { type: 'date', max: todayJ() }); id.value = todayJ();
     const ng = h('p', { class: 'msg ng', hidden: true }, '値段と株数を数字で入れてください。');
-    const add = h('button', { class: 'btn pri', type: 'button' }, '仮に買う');
+    const add = h('button', { class: 'btn pri', type: 'button' }, lots.length ? '仮に買い増す' : '仮に買う');
+    if (lots.length) s4.append(h('h3', null, '買い増す（値段・株数・日付を入れて追加）'));
     add.addEventListener('click', async () => {
       const price = parseFloat(ip.value.replace(/[,円\s]/g, '')), shares = parseInt(is.value.replace(/[,株\s]/g, ''), 10);
       if (!(price > 0) || !(shares > 0)) { ng.hidden = false; return; }
@@ -525,11 +535,13 @@ function alertBox(t) { const n = $('#live-note'); n.hidden = false; n.textConten
 function openSettings() {
   const gh = h('input', { type: 'password', autocomplete: 'off', placeholder: 'github_pat_…' }); gh.value = LS.get('kabu_gh') || '';
   const gas = h('input', { type: 'url', placeholder: 'https://script.google.com/macros/s/…/exec' }); gas.value = LS.get('kabu_gas') || '';
+  const bd = h('input', { type: 'text', inputmode: 'numeric', placeholder: '200000' }); bd.value = String(budget());
   const ok = h('p', { class: 'msg ok', hidden: true }, '保存しました。');
   const save = h('button', { class: 'btn pri', type: 'button' }, '保存');
   save.addEventListener('click', async () => {
     gh.value.trim() ? LS.set('kabu_gh', gh.value.trim()) : LS.del('kabu_gh');
     gas.value.trim() ? LS.set('kabu_gas', gas.value.trim()) : LS.del('kabu_gas');
+    { const n = parseInt(bd.value.replace(/[,円\s]/g, ''), 10); if (n > 0) LS.set('kabu_budget', String(n)); }
     ok.hidden = false; await loadWatch(); render(); refreshLive();
   });
   const reload = h('button', { class: 'btn', type: 'button' }, '最新のデータを読み直す'); reload.addEventListener('click', () => { closeDetail(); loadData(); });
@@ -541,6 +553,7 @@ function openSettings() {
       h('p', { class: 'note' }, 'kabu-app リポジトリの「Contents」だけを読み書きできるトークンを入れます。この端末の中にだけ保存します。'), gh),
     h('div', { class: 'sec' }, h('h3', null, '今の株価用：取り次ぎ先（Google Apps Script のURL）'),
       h('p', { class: 'note' }, '入れると、開いたときの株価を取りに行きます。空にすると前の晩の株価だけを出します。'), gas),
+    h('div', { class: 'sec' }, h('h3', null, '仮に買うときの予算（円）'), bd),
     h('div', { class: 'btns' }, save, ok), h('div', { class: 'btns' }, reload, forget)));
   sh.hidden = false; document.body.style.overflow = 'hidden';
 }
