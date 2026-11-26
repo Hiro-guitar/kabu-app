@@ -1,7 +1,7 @@
 'use strict';
 // 株チェック（ひろき専用）。データは暗号化されていて、合言葉がないと読めない。
 const REPO = 'Hiro-guitar/kabu-app';
-const S = { data: null, key: null, salt: null, view: 'watch', day: null, live: {}, liveAt: null, watch: [], watchSha: null, years: {} };
+const S = { data: null, key: null, salt: null, view: 'cand', day: null, live: {}, liveAt: null, watch: [], watchSha: null, years: {} };
 
 // ---------- 小道具 ----------
 const LS = {
@@ -249,7 +249,7 @@ function priceBox(code, small) {
   const prev = l && l.prev != null ? l.prev : null;
   const chg = prev ? (p / prev - 1) * 100 : null;
   return h('div', { class: 'price' }, h('b', { class: chg > 0 ? 'up' : chg < 0 ? 'dn' : '' }, `${p}円`),
-    h('small', null, l ? `前日比 ${pct(chg)}` : '前の晩の終値'));
+    h('small', null, l ? `前の日から ${pct(chg)}` : '前の晩の値段'));
 }
 
 // ---------- 仮に買ったら ----------
@@ -274,7 +274,7 @@ function setView(v) { S.view = v; document.querySelectorAll('#tabs button').forE
 function render() {
   if (!S.data) return;
   const m = $('#main');
-  const f = { watch: vWatch, cand: vCand, value: vValue, drops: vDrops, hist: vHist }[S.view] || vWatch;
+  const f = { watch: vWatch, cand: vCand, hist: vHist }[S.view] || vCand;
   m.replaceChildren(...[].concat(f()));
 }
 function dayChips() {
@@ -317,73 +317,85 @@ function vWatch() {
   out.push(list);
   return out;
 }
+const TYPE = { '伸び': '数字が伸びている', '中身': '中身に比べて安い', '一時': '一時的に安い' };
+const TAGP = { '放置': '株価はほぼ横ばい', '動き出し': '最近上がり始めた', '下落中': '下がり続けている' };
+function typesOf(code, day) {
+  const r = (S.data.history || []).filter((x) => String(x.code) === String(code) && (!day || x.date === day)).pop();
+  const m = r && /^【([^】]+)】/.exec(r.judgement || '');
+  return m ? m[1].split(/[＋+]/).map((t) => TYPE[t]).filter(Boolean) : [];
+}
+function fold(title, n, kids, open) {
+  const d = h('details', { class: 'fold' }, h('summary', null, h('span', null, title), h('span', { class: 'cnt' }, n)), h('div', { class: 'fold-b' }, kids));
+  if (open) d.open = true; return d;
+}
 function vCand() {
   const sm = S.data.summary.find((r) => (r.day || r.date) === S.day) || {};
-  const out = [dayChips(),
-    h('div', { class: 'stats' },
-      h('div', { class: 'stat' }, h('span', null, '候補'), h('b', null, sm.candidates ?? '—')),
-      h('div', { class: 'stat' }, h('span', null, '危険信号'), h('b', null, sm.signals ?? '—')),
-      h('div', { class: 'stat' }, h('span', null, '開示'), h('b', null, sm.disclosures ?? '—')),
-      h('div', { class: 'stat' }, h('span', null, 'IR'), h('b', null, sm.ir_companies ?? '—')))];
-  const rows = onDay(S.data.today);
-  out.push(h('h2', null, `${ymd(S.day)}の候補`));
-  if (!rows.length) out.push(h('div', { class: 'empty' }, 'この日の候補はありません。'));
-  rows.forEach((r) => out.push(candCard(r)));
-  const sig = onDay(S.data.signals);
-  if (sig.length) {
-    out.push(h('h2', null, '危険信号'));
-    out.push(h('div', { class: 'list' }, sig.map((s) => h('div', { class: 'li sig', onclick: () => openDetail(s.code) },
-      h('div', { class: 'row' }, h('span', { class: 'name' }, s.name), h('span', { class: 'code' }, s.code), s.tag ? h('span', { class: 'pill ' + tagCls(s.tag) }, s.tag) : null),
-      h('p', null, s.what)))));
+  const rows = onDay(S.data.today), sig = onDay(S.data.signals), dr = onDay(S.data.drops), ex = S.data.exdates || [], val = S.data.value || [];
+  const out = [dayChips()];
+  out.push(h('div', { class: 'card hero' },
+    h('div', { class: 'hero-t' }, rows.length ? `注目 ${rows.length}社` : 'この日は注目なし'),
+    h('p', { class: 'note' }, `${ymd(S.day)}：会社の発表${sm.disclosures ?? '—'}件と、${sm.ir_companies ?? '—'}社のお知らせを読みました。`),
+    sig.length ? h('p', { class: 'warn-t' }, `気をつける：${sig.map((x) => x.name).join('、')}`) : null));
+  if (rows.length) {
+    out.push(h('h2', null, '注目の銘柄'), h('p', { class: 'note' }, '気になったら「見守る」を押すと、毎晩追いかけます。'));
+    rows.forEach((r) => out.push(candCard(r)));
   }
-  if (sm.data_note) out.push(h('p', { class: 'note' }, sm.data_note));
+  out.push(fold('気をつける銘柄（増資・下方修正・大株主の売りなど）', sig.length, sig.length ? h('div', { class: 'list' }, sig.map((x) => h('div', { class: 'li sig', onclick: () => openDetail(x.code) },
+    h('div', { class: 'row' }, h('span', { class: 'name' }, x.name), h('span', { class: 'code' }, x.code)), h('p', null, x.what)))) : h('p', { class: 'note' }, 'この日はありません。'), sig.length > 0));
+  out.push(fold('大きく下げた銘柄と理由', dr.length, dropsList(dr)));
+  out.push(fold('もうすぐ優待の権利日', ex.length, exList(ex)));
+  out.push(fold('負けにくい安い会社（利益や財産に比べて安い）', val.length, valueList(val)));
   return out;
 }
 function candCard(r) {
   const v = (S.data.value || []).find((x) => String(x.code) === String(r.code));
+  const ty = typesOf(r.code, r.date || r.day); if (v && !ty.includes(TYPE['中身'])) ty.push(TYPE['中身']);
+  const qa = (q, a) => h('div', { class: 'qa' }, h('div', { class: 'q' }, q), h('div', { class: 'a' }, a || '—'));
   return h('div', { class: 'card tap', onclick: () => openDetail(r.code) },
-    h('div', { class: 'row' }, h('span', { class: 'name' }, r.name), h('span', { class: 'code' }, r.code),
-      h('span', { class: 'pill ' + tagCls(r.tag) }, r.tag), v ? h('span', { class: 'pill p-acc' }, `中身で安い${v.level === '3つとも' ? '（3つとも）' : ''}`) : null, priceBox(r.code)),
-    h('dl', { class: 'kv' },
-      h('dt', null, '伸びている'), h('dd', null, r.growth || '—'),
-      h('dt', null, 'まだ安い理由'), h('dd', null, r.why || '—'),
-      h('dt', null, '気になる点'), h('dd', null, r.risk || '—'),
-      h('dt', null, '出どころ'), h('dd', { onclick: (e) => e.stopPropagation() }, link(r.source_url, r.source_title || '資料'))),
-    h('div', { class: 'btns' }, watchBtn(r.code, r.name), h('button', { class: 'btn', type: 'button' }, 'チャートと開示')));
+    h('div', { class: 'row' }, h('span', { class: 'name' }, r.name), h('span', { class: 'code' }, r.code), priceBox(r.code)),
+    h('div', { class: 'badges' }, ty.map((t) => h('span', { class: 'pill p-acc' }, t)), TAGP[r.tag] ? h('span', { class: 'pill ' + tagCls(r.tag) }, TAGP[r.tag]) : null),
+    qa('なにが良い？', r.growth), qa('なぜまだ安い？', r.why), qa('気をつけること', r.risk),
+    h('div', { class: 'src', onclick: (e) => e.stopPropagation() }, '出どころ：', link(r.source_url, r.source_title || '資料')),
+    h('div', { class: 'btns' }, watchBtn(r.code, r.name), h('button', { class: 'btn', type: 'button' }, 'チャートと発表を見る')));
 }
-function vValue() {
-  const rows = S.data.value || [];
-  return [h('h2', null, '中身に比べて安い会社'),
-    h('p', { class: 'note' }, '会社全体の値段が、今期の予想利益の何年分か・手元の現金の何倍か・財産（純資産）の何倍か。過去の検証では、3つともの会社は1年後に市場全体に勝つ割合が高く、大負けが少なめでした。短期で大きく取るより、負けにくくする物差しです。'),
-    rows.length ? h('div', { class: 'list' }, rows.map((r) => h('div', { class: 'li', onclick: () => openDetail(r.code) },
-      h('div', { class: 'row' }, h('span', { class: 'name' }, r.name), h('span', { class: 'code' }, r.code),
-        h('span', { class: 'pill ' + (r.level === '3つとも' ? 'p-acc' : 'p-sonota') }, r.level), r.tag ? h('span', { class: 'pill ' + tagCls(r.tag) }, r.tag) : null,
+function valueList(rows) {
+  return rows.length ? h('div', { class: 'list' }, h('p', { class: 'note' }, '会社全体の値段が、今期の予想利益の何年分か・手元の現金の何倍か・財産の何倍か。急に上がる株ではなく、負けにくい株の物差しです。'),
+    rows.map((r) => h('div', { class: 'li', onclick: () => openDetail(r.code) },
+      h('div', { class: 'row' }, h('span', { class: 'name' }, r.name), h('span', { class: 'code' }, r.code), h('span', { class: 'pill ' + (r.level === '3つとも' ? 'p-acc' : 'p-sonota') }, r.level === '3つとも' ? 'とても安い' : '安い'),
         h('span', { class: 'price' }, h('b', { style: 'font-size:15px' }, `${r.price}円`))),
-      h('p', null, `予想利益の${r.years ?? '—'}年分／現金の${r.cash_x ?? '—'}倍／財産の${r.assets_x ?? '—'}倍`)))) : h('div', { class: 'empty' }, '当てはまる会社はありません。')];
+      h('p', null, `利益の${r.years ?? '—'}年分／現金の${r.cash_x ?? '—'}倍／財産の${r.assets_x ?? '—'}倍`)))) : h('p', { class: 'note' }, '当てはまる会社はありません。');
 }
-function vDrops() {
-  const out = [dayChips(), h('h2', null, '大きく下げた銘柄と理由'),
-    h('p', { class: 'note' }, '前の営業日から5%以上下げたもの。理由が「権利落ち」「市場全体」なら、事業の悪い話ではないかもしれません。')];
-  const d = onDay(S.data.drops);
-  out.push(d.length ? h('div', { class: 'list' }, d.slice(0, 30).map((r) => h('div', { class: 'li ' + (r.reason_kind === '不明' || r.reason_kind === '開示あり' || r.reason_kind === '大株主の売却' ? 'sig' : ''), onclick: () => openDetail(r.code) },
-    h('div', { class: 'row' }, h('span', { class: 'name' }, r.name), h('span', { class: 'code' }, r.code), h('span', { class: 'pill p-sonota' }, r.reason_kind),
-      h('span', { class: 'price' }, h('b', { class: 'dn', style: 'font-size:15px' }, `${r.ret}%`), h('small', null, `${r.prev}→${r.close}円`))),
-    h('p', null, r.reason + (r.titles ? `（${r.titles}）` : ''))))) : h('div', { class: 'empty' }, 'この日は5%以上下げた銘柄はありません。'));
-  out.push(h('h2', null, '近い権利付最終日（2週間以内）'));
-  const ex = S.data.exdates || [];
-  out.push(ex.length ? h('div', { class: 'list' }, ex.map((r) => h('div', { class: 'li warnl', onclick: () => openDetail(r.code) },
-    h('div', { class: 'row' }, h('span', { class: 'name' }, r.name), h('span', { class: 'code' }, r.code), r.tag ? h('span', { class: 'pill ' + tagCls(r.tag) }, r.tag) : null),
-    h('p', null, `${r.kind}：権利付最終日 ${md(r.last_day)}（あと${r.days}日）／権利落ち日 ${md(r.ex_day)}／株価${r.price}円`),
-    r.past_note ? h('p', null, r.past_note) : null))) : h('div', { class: 'empty' }, '2週間以内に権利付最終日が来る銘柄はありません。'));
-  return out;
+function dropsList(d) {
+  return d.length ? h('div', { class: 'list' }, h('p', { class: 'note' }, '前の日から5%以上下げたもの。理由が「権利落ち」「市場全体」なら、会社の中身が悪くなったわけではないかもしれません。'),
+    d.slice(0, 30).map((r) => h('div', { class: 'li ' + (r.reason_kind === '不明' || r.reason_kind === '開示あり' || r.reason_kind === '大株主の売却' ? 'sig' : ''), onclick: () => openDetail(r.code) },
+      h('div', { class: 'row' }, h('span', { class: 'name' }, r.name), h('span', { class: 'code' }, r.code), h('span', { class: 'pill p-sonota' }, r.reason_kind),
+        h('span', { class: 'price' }, h('b', { class: 'dn', style: 'font-size:15px' }, `${r.ret}%`), h('small', null, `${r.prev}→${r.close}円`))),
+      h('p', null, r.reason)))) : h('p', { class: 'note' }, 'この日はありません。');
+}
+function exList(ex) {
+  return ex.length ? h('div', { class: 'list' }, h('p', { class: 'note' }, 'この日まで持っていると優待がもらえる日。次の日は優待目当ての売りで下がりやすくなります。'),
+    ex.map((r) => h('div', { class: 'li warnl', onclick: () => openDetail(r.code) },
+      h('div', { class: 'row' }, h('span', { class: 'name' }, r.name), h('span', { class: 'code' }, r.code)),
+      h('p', null, `${r.kind}：${md(r.last_day)}まで（あと${r.days}日）・株価${r.price}円`), r.past_note ? h('p', null, r.past_note) : null))) : h('p', { class: 'note' }, '2週間以内にはありません。');
 }
 function vHist() {
-  const rows = [...(S.data.history || [])].reverse();
-  return [h('h2', null, 'これまでの記録'), h('p', { class: 'note' }, '見送った銘柄も含めて全部残しています。3か月・6か月後に答え合わせします。'),
-    h('div', { class: 'list' }, rows.map((r) => h('div', { class: 'li', onclick: () => openDetail(r.code) },
-      h('div', { class: 'row' }, h('span', { class: 'code' }, md(r.date)), h('span', { class: 'name', style: 'font-size:15px' }, r.name), h('span', { class: 'code' }, r.code),
-        h('span', { class: 'price' }, watchBtn(r.code, r.name))),
-      h('p', null, `${r.price ? r.price + '円・' : ''}${r.judgement || ''}`))))];
+  const all = [...(S.data.history || [])].reverse();
+  const kind = (r) => { const j = r.judgement || ''; return /^見送り/.test(j) ? 'skip' : /^危険/.test(j) ? 'bad' : 'pick'; };
+  S.histF = S.histF || 'pick';
+  const chips = h('div', { class: 'chips' }, [['pick', '注目したもの'], ['skip', '見送ったもの'], ['all', '全部']].map(([k, t]) => {
+    const b = h('button', { type: 'button', 'aria-pressed': String(S.histF === k) }, t); b.addEventListener('click', () => { S.histF = k; render(); }); return b; }));
+  const rows = all.filter((r) => S.histF === 'all' || kind(r) === S.histF);
+  const clean = (j) => String(j || '').replace(/^【[^】]+】/, '').replace(/^(候補|見送り|危険信号)[^。]*?[)）]?[。、]?\s*/, '');
+  return [h('h2', null, 'これまでの記録'), h('p', { class: 'note' }, '毎晩判断した銘柄を全部残しています。3か月・6か月後に、当たったかを確かめます。'), chips,
+    rows.length ? h('div', { class: 'list' }, rows.map((r) => {
+      const k = kind(r); const ty = typesOf(r.code, r.date);
+      return h('div', { class: 'li', onclick: () => openDetail(r.code) },
+        h('div', { class: 'row' }, h('span', { class: 'code' }, md(r.date)), h('span', { class: 'name', style: 'font-size:15px' }, r.name),
+          h('span', { class: 'pill ' + (k === 'pick' ? 'p-acc' : k === 'bad' ? 'p-geraku' : 'p-sonota') }, k === 'pick' ? '注目' : k === 'bad' ? '危険' : '見送り'),
+          h('span', { class: 'price' }, watchBtn(r.code, r.name))),
+        ty.length ? h('div', { class: 'badges' }, ty.map((t) => h('span', { class: 'pill p-sonota' }, t))) : null,
+        h('p', { class: 'clamp' }, `${r.price ? r.price + '円のとき。' : ''}${clean(r.judgement)}`));
+    })) : h('div', { class: 'empty' }, 'ありません。')];
 }
 
 // ---------- 詳細（チャート・開示・見守りのできごと） ----------
@@ -396,18 +408,18 @@ function openDetail(code, keep) {
   const w = S.watch.find((x) => String(x.code) === code);
   const body = h('div', { class: 'sheet-body' });
   body.append(h('div', { class: 'big' }, h('b', { class: chg > 0 ? 'up' : chg < 0 ? 'dn' : '' }, p != null ? `${p}円` : '—'),
-    h('span', null, l ? `前日比 ${pct(chg)}（${S.liveAt ? `${S.liveAt.getHours()}:${String(S.liveAt.getMinutes()).padStart(2, '0')}取得` : ''}）` : '前の晩の終値'),
+    h('span', null, l ? `前の日から ${pct(chg)}（${S.liveAt ? `${S.liveAt.getHours()}:${String(S.liveAt.getMinutes()).padStart(2, '0')}取得` : ''}）` : '前の晩の値段'),
     (S.data.tags || {})[code] ? h('span', { class: 'pill ' + tagCls(S.data.tags[code]) }, S.data.tags[code]) : null));
   body.append(h('div', { class: 'btns' }, watchBtn(code, name)));
   // チャート
   const sec = h('div', { class: 'sec' });
   const bar = h('div', { class: 'chips' }); const box = h('div', { class: 'chart' });
-  [[0.5, '半年'], [1, '1年'], [2, '2年'], [5, '5年（週足）']].forEach(([n, t]) => {
+  [[0.5, '半年'], [1, '1年'], [2, '2年'], [5, '5年（1週ごと）']].forEach(([n, t]) => {
     const b = h('button', { type: 'button', 'aria-pressed': String((S.years[code] || 1) === n) }, t);
     b.addEventListener('click', () => { S.years[code] = n; bar.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); drawChart(box, code, n); });
     bar.append(b);
   });
-  sec.append(h('h3', null, '日足（赤＝上げた日、青＝下げた日。指で横になぞるとその日。下の三角＝開示・お知らせの日）'), bar, box);
+  sec.append(h('h3', null, '値動き（赤＝上がった日、青＝下がった日。指で横になぞるとその日の値段。下の三角＝発表があった日）'), bar, box);
   body.append(sec);
   {
     const s4 = h('div', { class: 'sec' }, h('h3', null, '仮に買う'));
@@ -466,7 +478,7 @@ function openDetail(code, keep) {
       h('dt', null, '気になる点'), h('dd', null, cand.risk || '—'), h('dt', null, '出どころ'), h('dd', null, link(cand.source_url, cand.source_title || '資料')))));
   const ns = (S.data.news || []).filter((x) => String(x.code) === code);
   if (ns.length) {
-    const s3 = h('div', { class: 'sec' }, h('h3', null, '最近の開示・お知らせ（直近1年。日付を押すとチャートでその日を選びます）'));
+    const s3 = h('div', { class: 'sec' }, h('h3', null, '最近の発表（この1年。日付を押すとチャートでその日を選びます）'));
     const item = (x) => {
       const d = h('button', { class: 'd', type: 'button' }, x.date.slice(2).replaceAll('-', '/'));
       d.addEventListener('click', () => { if (box._select && box._select(x.date)) box.scrollIntoView({ block: 'center', behavior: 'smooth' }); });
@@ -520,7 +532,7 @@ function drawChart(host, code, yrs) {
     sv.append(svg('line', { x1: AW, x2: W - 4, y1: y(t), y2: y(t), stroke: '#2a3542', 'stroke-width': 1 }));
     const tx = svg('text', { class: 'ax', x: AW - 6, y: y(t) + 3.5, 'text-anchor': 'end' }); tx.textContent = `${t}円`; sv.append(tx);
   });
-  const vt = svg('text', { class: 'ax', x: AW - 6, y: H + VH - 2, 'text-anchor': 'end' }); vt.textContent = '出来高'; sv.append(vt);
+  const vt = svg('text', { class: 'ax', x: AW - 6, y: H + VH - 2, 'text-anchor': 'end' }); vt.textContent = '売買の量'; sv.append(vt);
   const gap = yrs >= 5 ? 12 : yrs >= 2 ? 3 : yrs >= 1 ? 2 : 1; let lastLab = -999;
   pts.forEach((p, i) => {
     const m = +p.d.slice(5, 7); if (i > 0 && p.d.slice(0, 7) === pts[i - 1].d.slice(0, 7)) return;
@@ -550,8 +562,8 @@ function drawChart(host, code, yrs) {
     sel = Math.max(0, Math.min(n - 1, i)); const p = pts[sel];
     cross.setAttribute('x1', x(sel)); cross.setAttribute('x2', x(sel));
     const pc = sel > 0 ? pts[sel - 1].c : null; const c = pc ? (p.c / pc - 1) * 100 : null;
-    txt.replaceChildren(h('b', null, weekly ? `${ymd(p.d)}の週` : ymd(p.d)), `　終値 ${p.c}円${c != null ? `（前${unit}比 ${pct(c)}）` : ''}`,
-      h('br'), h('small', null, `始値 ${p.o}／高値 ${p.h}／安値 ${p.l}／出来高 ${p.v.toLocaleString()}株`));
+    txt.replaceChildren(h('b', null, weekly ? `${ymd(p.d)}の週` : ymd(p.d)), `　終わりの値段 ${p.c}円${c != null ? `（前の${unit}から ${pct(c)}）` : ''}`,
+      h('br'), h('small', null, `始まり ${p.o}／一番高い ${p.h}／一番安い ${p.l}／売り買いされた数 ${p.v.toLocaleString()}株`));
     prev.disabled = sel === 0; next.disabled = sel === n - 1;
     evBox.replaceChildren(...(byIdx.get(sel) || []).map((e) => h('li', null, h('span', { class: 'pill ' + (e.kind === '危険' ? 'p-geraku' : 'p-sonota') }, e.kind), link(e.url, e.title))));
   };
@@ -594,10 +606,36 @@ function openSettings() {
   sh.hidden = false; document.body.style.overflow = 'hidden';
 }
 
+function openHelp() {
+  const back = h('button', { class: 'ibtn', type: 'button', 'aria-label': '戻る' }, '‹'); back.style.fontSize = '24px'; back.addEventListener('click', closeDetail);
+  const sec = (t, ...p) => h('div', { class: 'sec' }, h('h3', null, t), ...p.map((x) => h('p', { class: 'note', style: 'color:var(--fg)' }, x)));
+  const sh = $('#sheet'); S.detail = null;
+  sh.replaceChildren(h('div', { class: 'sheet-top' }, back, h('h2', null, '使い方')), h('div', { class: 'sheet-body' },
+    sec('このアプリは何？', '毎晩、株価500円以下の約1,500社の発表を全部読んで、「いい材料が出たのに、株価がまだ上がりきっていない会社」を探した結果です。買うかどうかを決めるのはひろきさんです。'),
+    sec('「今日」タブ', '一番上に、その日の注目が何社あったか。その下に注目の銘柄のカードが並びます。カードの「なにが良い？」「なぜまだ安い？」「気をつけること」を読んで、気になったら「見守る」を押します。上の日付で前の日も見られます。'),
+    sec('注目の種類', '数字が伸びている：売上・会員数・業績予想などが良くなったのに、株価が追いついていない。', '中身に比べて安い：会社の利益や財産に比べて、値段が安い。', '一時的に安い：優待の権利落ちや市場全体の下げで、一時的に下がっている。'),
+    sec('「見守り」タブ', '「見守る」を押した銘柄です。入れた日からの値動きと、発表・大株主の売買・大きな下げなどの出来事が毎晩たまっていきます。「仮に買う」で、値段と株数を入れて損益を追うこともできます。'),
+    sec('「記録」タブ', 'これまで判断した銘柄の全部です。「注目したもの」と「見送ったもの」に分けて見られます。見送った理由も残っています。'),
+    sec('言葉の意味',
+      '発表（開示）：会社が東証に出す正式なお知らせ。決算や業績の見込みの変更など。',
+      '決算：3か月ごとの成績表。売上やもうけがいくらだったか。',
+      '業績の見込みを上げた（上方修正）：会社が「今期はもっともうかる」と見込みを直すこと。下げるのは下方修正。',
+      '本業のもうけ（営業利益）：売上から、仕入れや人件費などを引いた残り。',
+      '進み具合（進捗）：1年の見込みに対して、今までにどれだけ稼げているか。',
+      '増資・新株予約権：会社が株を増やすこと。1株の価値が薄まるので、株価は下がりやすい。',
+      '大株主：株を5%以上持っている人や会社。5%を超えたり、1%以上増減したりすると報告が出る。',
+      '優待・権利日：その日まで株を持っているともらえるお礼（優待）や配当。次の日（権利落ち）は売られて下がりやすい。',
+      '会社全体の値段（時価総額）：株価×株の数。',
+      '売り買いされた数（出来高）：その日に取引された株の数。急に増えると、注目され始めたしるし。'),
+    sec('銘柄を押すと', 'チャート（指で横になぞるとその日の値段）と、最近の発表の一覧が出ます。発表の日付を押すと、チャートでその日を選びます。')));
+  sh.hidden = false; document.body.style.overflow = 'hidden';
+}
+
 // ---------- はじまり ----------
 document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.v)));
 $('#btn-live').addEventListener('click', () => { refreshLive(); });
 $('#btn-set').addEventListener('click', openSettings);
+$('#btn-help').addEventListener('click', openHelp);
 document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-current', b.dataset.v === S.view ? 'page' : 'false'));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.data) refreshLive(); });
 boot();

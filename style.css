@@ -20,7 +20,7 @@ a{color:inherit}
 @keyframes spin{to{transform:rotate(360deg)}}
 .live-note{margin:14px 20px 0;padding:8px 12px;font-size:12px;line-height:1.5;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:10px}
 main{padding:20px 20px 32px;display:flex;flex-direction:column;gap:18px}
-.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(5,1fr);
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(3,1fr);
   padding:6px 4px calc(6px + env(safe-area-inset-bottom));background:rgba(15,20,26,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line)}
 .tabs button{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;color:var(--mut);padding:4px 0;cursor:pointer}
 .tabs svg{width:22px;height:22px}
@@ -101,3 +101,18 @@ table.t td{padding:6px;border-bottom:1px solid var(--line);font-variant-numeric:
 .bbar{height:8px;border-radius:4px;background:var(--panel2);overflow:hidden}
 .bbar i{display:block;height:100%;background:var(--acc)}
 input[type=date]{-webkit-appearance:none;appearance:none;min-height:44px}
+.hero{gap:6px}.hero-t{font-size:22px;font-weight:700}
+.warn-t{margin:0;font-size:13px;color:var(--bad);font-weight:600}
+.badges{display:flex;gap:6px;flex-wrap:wrap}
+.qa{display:flex;flex-direction:column;gap:2px}
+.qa .q{font-size:12px;color:var(--acc);font-weight:700}
+.qa .a{font-size:14px;line-height:1.65}
+.src{font-size:12px;color:var(--mut)}
+.fold{background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+.fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;font-size:14.5px;font-weight:600}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::after{content:'›';color:var(--mut);font-size:20px;transform:rotate(90deg);transition:transform .2s}
+.fold[open]>summary::after{transform:rotate(-90deg)}
+.fold .cnt{margin-left:auto;color:var(--mut);font-weight:400;font-variant-numeric:tabular-nums}
+.fold-b{padding:0 12px 14px}
+.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
