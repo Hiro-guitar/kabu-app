@@ -118,7 +118,22 @@ async function loadData() {
 }
 
 // ---------- 見守り（watch.bin を GitHub に保存） ----------
+function localWatch() { try { return JSON.parse(LS.get('kabu_watch_local') || 'null'); } catch { return null; } }
+function mergeLocal(remote) {
+  const loc = localWatch(); if (!loc) return remote;
+  const m = new Map(remote.map((w) => [String(w.code), w]));
+  loc.forEach((w) => { const r = m.get(String(w.code)); m.set(String(w.code), r ? { ...r, lots: [...(r.lots || []), ...(w.lots || []).filter((l) => !(r.lots || []).some((x) => x.date === l.date && x.price === l.price && x.shares === l.shares))], memo: r.memo || w.memo } : w); });
+  return [...m.values()];
+}
 async function loadWatch() {
+  await loadWatchRaw();
+  const loc = localWatch();
+  if (loc) {
+    S.watch = mergeLocal(S.watch);
+    if (LS.get('kabu_gh')) { if (await saveWatch(S.watch)) LS.del('kabu_watch_local'); }
+  }
+}
+async function loadWatchRaw() {
   const tok = LS.get('kabu_gh');
   try {
     if (tok) {
@@ -135,7 +150,12 @@ async function loadWatch() {
 }
 async function saveWatch(next) {
   const tok = LS.get('kabu_gh');
-  if (!tok) { alertBox('「見守る」を使うには、設定で GitHub の書き込み用トークンを入れてください。'); openSettings(); return false; }
+  if (!tok) {
+    // トークンがまだ無いときは、この端末にだけ保存しておく（トークンを入れると次の保存でGitHubにも送る）
+    LS.set('kabu_watch_local', JSON.stringify(next)); S.watch = next;
+    alertBox('この端末にだけ保存しました。毎晩のチェックで追いかけるには、設定で GitHub のトークンを入れてください。');
+    return true;
+  }
   try {
     const box = await seal(next, S.key, S.salt);
     const body = { message: 'watch', content: b64e(new TextEncoder().encode(JSON.stringify(box))) };
