@@ -346,7 +346,7 @@ function candCard(r) {
       h('span', { class: 'pill ' + tagCls(r.tag) }, r.tag), v ? h('span', { class: 'pill p-acc' }, `中身で安い${v.level === '3つとも' ? '（3つとも）' : ''}`) : null, priceBox(r.code)),
     h('dl', { class: 'kv' },
       h('dt', null, '伸びている'), h('dd', null, r.growth || '—'),
-      h('dt', null, '放置の理由'), h('dd', null, r.why || '—'),
+      h('dt', null, 'まだ安い理由'), h('dd', null, r.why || '—'),
       h('dt', null, '気になる点'), h('dd', null, r.risk || '—'),
       h('dt', null, '出どころ'), h('dd', { onclick: (e) => e.stopPropagation() }, link(r.source_url, r.source_title || '資料'))),
     h('div', { class: 'btns' }, watchBtn(r.code, r.name), h('button', { class: 'btn', type: 'button' }, 'チャートと開示')));
@@ -462,7 +462,7 @@ function openDetail(code, keep) {
     body.append(s2);
   }
   if (cand) body.append(h('div', { class: 'sec' }, h('h3', null, `候補にしたとき（${md(cand.day || cand.date)}）`),
-    h('dl', { class: 'kv' }, h('dt', null, '伸びている'), h('dd', null, cand.growth || '—'), h('dt', null, '放置の理由'), h('dd', null, cand.why || '—'),
+    h('dl', { class: 'kv' }, h('dt', null, '伸びている'), h('dd', null, cand.growth || '—'), h('dt', null, 'まだ安い理由'), h('dd', null, cand.why || '—'),
       h('dt', null, '気になる点'), h('dd', null, cand.risk || '—'), h('dt', null, '出どころ'), h('dd', null, link(cand.source_url, cand.source_title || '資料')))));
   const ns = (S.data.news || []).filter((x) => String(x.code) === code);
   if (ns.length) {
