@@ -130,12 +130,18 @@ async function loadWatch() {
   const loc = localWatch();
   if (loc) {
     S.watch = mergeLocal(S.watch);
-    if (LS.get('kabu_gh')) { if (await saveWatch(S.watch)) LS.del('kabu_watch_local'); }
+    if (LS.get('kabu_gh') || LS.get('kabu_gas')) { if (await saveWatch(S.watch)) LS.del('kabu_watch_local'); }
   }
 }
 async function loadWatchRaw() {
-  const tok = LS.get('kabu_gh');
+  const tok = LS.get('kabu_gh'); const gas = LS.get('kabu_gas');
   try {
+    if (gas) {
+      const r = await fetch(`${gas}${gas.includes('?') ? '&' : '?'}watch=1&t=${Date.now()}`);
+      const j = await r.json();
+      if (j && j.watch) { S.watch = await unseal(j.watch, S.key); return; }
+      if (j && 'watch' in j && !tok) { S.watch = (S.data && S.data.watch || []).map((w) => ({ ...w })); return; }
+    }
     if (tok) {
       const r = await fetch(`https://api.github.com/repos/${REPO}/contents/watch.bin?t=${Date.now()}`, { headers: { Authorization: `Bearer ${tok}`, Accept: 'application/vnd.github+json' }, cache: 'no-store' });
       if (r.status === 404) { S.watch = []; S.watchSha = null; return; }
@@ -149,11 +155,21 @@ async function loadWatchRaw() {
   }
 }
 async function saveWatch(next) {
-  const tok = LS.get('kabu_gh');
+  const tok = LS.get('kabu_gh'); const gas = LS.get('kabu_gas');
+  if (gas) {
+    try {
+      const box = await seal(next, S.key, S.salt);
+      const r = await fetch(gas, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ watch: box }) });
+      const j = await r.json(); if (!j.ok) throw new Error(j.error || 'ng');
+      S.watch = next; LS.del('kabu_watch_local'); return true;
+    } catch (e) {
+      if (!tok) { LS.set('kabu_watch_local', JSON.stringify(next)); S.watch = next; alertBox('保存先につながらなかったので、この端末にだけ保存しました。'); return true; }
+    }
+  }
   if (!tok) {
     // トークンがまだ無いときは、この端末にだけ保存しておく（トークンを入れると次の保存でGitHubにも送る）
     LS.set('kabu_watch_local', JSON.stringify(next)); S.watch = next;
-    alertBox('この端末にだけ保存しました。毎晩のチェックで追いかけるには、設定で GitHub のトークンを入れてください。');
+    alertBox('この端末にだけ保存しました。設定で取り次ぎ先のURLを入れると、毎晩のチェックにも伝わります。');
     return true;
   }
   try {
@@ -569,9 +585,9 @@ function openSettings() {
   const back = h('button', { class: 'ibtn', type: 'button', 'aria-label': '戻る' }, '‹'); back.style.fontSize = '24px'; back.addEventListener('click', closeDetail);
   const sh = $('#sheet'); S.detail = null;
   sh.replaceChildren(h('div', { class: 'sheet-top' }, back, h('h2', null, '設定')), h('div', { class: 'sheet-body' },
-    h('div', { class: 'sec' }, h('h3', null, '見守るボタン用：GitHub の書き込み用トークン'),
-      h('p', { class: 'note' }, 'kabu-app リポジトリの「Contents」だけを読み書きできるトークンを入れます。この端末の中にだけ保存します。'), gh),
-    h('div', { class: 'sec' }, h('h3', null, '今の株価用：取り次ぎ先（Google Apps Script のURL）'),
+    h('div', { class: 'sec' }, h('h3', null, '（予備）GitHub の書き込み用トークン'),
+      h('p', { class: 'note' }, 'ふだんは空のままで大丈夫です（見守りと仮に買った記録は、下の取り次ぎ先に保存します）。'), gh),
+    h('div', { class: 'sec' }, h('h3', null, '取り次ぎ先（Google Apps Script のURL）：今の株価と、見守り・仮に買った記録の保存に使います'),
       h('p', { class: 'note' }, '入れると、開いたときの株価を取りに行きます。空にすると前の晩の株価だけを出します。'), gas),
     h('div', { class: 'sec' }, h('h3', null, '仮に買うときの予算（円）'), bd),
     h('div', { class: 'btns' }, save, ok), h('div', { class: 'btns' }, reload, forget)));
