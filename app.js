@@ -410,7 +410,7 @@ function openDetail(code, keep) {
   sec.append(h('h3', null, '日足（赤＝上げた日、青＝下げた日。指で横になぞるとその日。下の三角＝開示・お知らせの日）'), bar, box);
   body.append(sec);
   {
-    const s4 = h('div', { class: 'sec' }, h('h3', null, '仮に買ったら（値段と株数を好きに入れて、今いくらになっているかを見ます）'));
+    const s4 = h('div', { class: 'sec' }, h('h3', null, '仮に買う'));
     const lots = (w && w.lots) || [];
     if (lots.length) {
       const t = lotSum(w);
@@ -434,7 +434,7 @@ function openDetail(code, keep) {
     const id = h('input', { type: 'date', max: todayJ() }); id.value = todayJ();
     const ng = h('p', { class: 'msg ng', hidden: true }, '値段と株数を数字で入れてください。');
     const add = h('button', { class: 'btn pri', type: 'button' }, lots.length ? '仮に買い増す' : '仮に買う');
-    if (lots.length) s4.append(h('h3', null, '買い増す（値段・株数・日付を入れて追加）'));
+    if (lots.length) s4.append(h('h3', null, '買い増す'));
     add.addEventListener('click', async () => {
       const price = parseFloat(ip.value.replace(/[,円\s]/g, '')), shares = parseInt(is.value.replace(/[,株\s]/g, ''), 10);
       if (!(price > 0) || !(shares > 0)) { ng.hidden = false; return; }
